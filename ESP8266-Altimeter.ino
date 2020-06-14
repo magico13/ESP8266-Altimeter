@@ -24,26 +24,19 @@ Nice to have:
 #define STATE_FLIGHT 1
 #define STATE_POSTFLIGHT 2
 
-const unsigned long POST_FLIGHT_TSN_TIME = 3000; //N ms of almost the same alt => post-flight
-const float POST_FLIGHT_TSN_ERROR = 2; //transition alt can differ this much to be consider same
+const int TEMP_POLL_INTERVAL = 1000; //ms between reading the temperature
 
 const char* IDLE_PAGE =  "State is IDLE </br><form action=\"/START\" method=\"POST\"><input type=\"submit\" value=\"Start Recording\"></form>";
-const char* POST_FLIGHT_PAGE = "State is POSTFLIGHT </br><a href=\"/data\">Download Flight Data</a>";
+const char* POST_FLIGHT_PAGE = "State is POSTFLIGHT </br><a href=\"/data\">Download Flight Data</a> </br></br> <a href=\"/reset\">RESET</a>";
 const char* UPDATE_PAGE = "<form method='POST' action='/update' enctype='multipart/form-data'><input type='file' name='update'><input type='submit' value='Update'></form>";
 
 
 uint8_t currentState = STATE_IDLE;
-// bool otaSetup = false;
-// bool otaStarted = false;
 uint8_t connectedStations = 0;
 unsigned long time_ms;
 unsigned long last_temp_ms = 0;
 float pressure;
-float prevP;
-float alpha_P = 0.2;
 float temperature;
-float prevT;
-float alpha_T = 0.2;
 float altitude;
 File dataFile;
 
@@ -60,6 +53,7 @@ void handleDataDownload();
 void handleUpdateIndex(); //page you see when you go to /update
 void handleUpdateResponse(); //response from update page
 void handleUpdateLogic(); //actual update calls
+void handleReset();
 
 void setup() 
 {
@@ -89,6 +83,7 @@ void setup()
   server.on("/data", HTTP_GET, handleDataDownload);
   server.on("/update", HTTP_GET, handleUpdateIndex);
   server.on("/update", HTTP_POST, handleUpdateResponse, handleUpdateLogic);
+  server.on("/reset", HTTP_GET, handleReset);
   server.onNotFound(handleNotFound);
   server.begin();
   Serial.println("HTTP server started");
@@ -134,13 +129,9 @@ void check_connections()
 
 void idle_loop()
 {
-  //Serial.print("Num Stations: ");
-  //Serial.println(WiFi.softAPgetStationNum());
   if (connectedStations) //any clients connected?
   {
     server.handleClient();
-    // if (!otaSetup) setup_OTA();
-    // else ArduinoOTA.handle();
   }
   else
   {
@@ -148,7 +139,6 @@ void idle_loop()
     delay(250);
   }
   update_sensors(); //periodicly read the sensor data
-  // if (otaStarted) return;
 }
 
 void flight_setup()
@@ -202,7 +192,7 @@ void flight_loop()
     // }
   }
   //no delay for most readings
-  delay(10);
+  //delay(10);
 }
 
 void post_flight_setup()
@@ -237,16 +227,11 @@ bool update_sensors()
     //current time
     time_ms = millis();
     //get pressure, temp, and altitude
-    if (!prevP) prevP = event.pressure;
-    pressure = alpha_P * event.pressure + (1-alpha_P)*prevP; //hPa. lowpass filter
-    prevP = pressure;
-    if ((time_ms - last_temp_ms) > 1000 || last_temp_ms == 0) //update temperature once per second
+    pressure = event.pressure;
+    if ((time_ms - last_temp_ms) > TEMP_POLL_INTERVAL || !last_temp_ms) //update temperature once per second
     {
       last_temp_ms = time_ms;
       bmp.getTemperature(&temperature); //C
-      //if (!prevT) prevT = temperature;
-      //temperature = alpha_T * temperature + (1-alpha_T)*prevT; //lowpass filter
-      //prevT = temperature;
     }
     
     altitude = bmp.pressureToAltitude(1013.25f, pressure, temperature); //meters
@@ -369,42 +354,16 @@ void handleUpdateLogic()
   }
   yield();
 }
-#pragma endregion WebServer
 
-// void setup_OTA()
-// {
-//   Serial.println("Starting up OTA services.");
-//   otaSetup = true;
-//   ArduinoOTA.onStart([]() {
-//     String type;
-//     if (ArduinoOTA.getCommand() == U_FLASH) {
-//       type = "sketch";
-//     } else { // U_FS
-//       type = "filesystem";
-//     }
-//     otaStarted = true;
-//     // NOTE: if updating FS this would be the place to unmount FS using FS.end()
-//     Serial.println("Start updating " + type);
-//   });
-//   ArduinoOTA.onEnd([]() {
-//     Serial.println("\nEnd");
-//   });
-//   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-//     Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
-//   });
-//   ArduinoOTA.onError([](ota_error_t error) {
-//     Serial.printf("Error[%u]: ", error);
-//     if (error == OTA_AUTH_ERROR) {
-//       Serial.println("Auth Failed");
-//     } else if (error == OTA_BEGIN_ERROR) {
-//       Serial.println("Begin Failed");
-//     } else if (error == OTA_CONNECT_ERROR) {
-//       Serial.println("Connect Failed");
-//     } else if (error == OTA_RECEIVE_ERROR) {
-//       Serial.println("Receive Failed");
-//     } else if (error == OTA_END_ERROR) {
-//       Serial.println("End Failed");
-//     }
-//   });
-//   ArduinoOTA.begin();
-// }
+void handleReset()
+{
+  //redirect to root
+  server.sendHeader("Connection", "close");
+  server.sendHeader("Location","/");
+  server.send(303);
+
+  delay(10);
+  //reset
+  ESP.reset();
+}
+#pragma endregion WebServer
