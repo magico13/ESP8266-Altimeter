@@ -247,6 +247,10 @@ void handleRoot()
   if (currentState == STATE_IDLE)
   {
     pageText = IDLE_PAGE;
+    pageText += String(time_ms) + " ms</br>";
+    pageText += String(pressure) + " hPa</br>";
+    pageText += String(temperature) + " C</br>";
+    pageText += String(altitude) + " meters</br>";
   }
   else if (currentState == STATE_FLIGHT)
   {
