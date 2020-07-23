@@ -35,6 +35,7 @@ uint8_t currentState = STATE_IDLE;
 uint8_t connectedStations = 0;
 unsigned long time_ms;
 unsigned long last_temp_ms = 0;
+unsigned long start_ms = 0;
 float pressure;
 float temperature;
 float altitude;
@@ -151,6 +152,7 @@ void flight_setup()
     Serial.println("Failed to open data file!");
   }
   dataFile.println("time (ms), pressure (hPa), temp (C), altitude (m)");
+  start_ms = time_ms;
 }
 
 void flight_loop()
@@ -162,7 +164,7 @@ void flight_loop()
 
   if (update_sensors())
   {
-    dataFile.print(time_ms);
+    dataFile.print(time_ms-start_ms);
     dataFile.print(", ");
     dataFile.print(pressure);
     dataFile.print(", ");
@@ -256,6 +258,7 @@ void handleRoot()
   {
     pageText = "State is FLIGHT </br>";
     pageText += String(time_ms) + " ms</br>";
+    pageText += String(time_ms - start_ms) + " ms MET</br>";
     pageText += String(pressure) + " hPa</br>";
     pageText += String(temperature) + " C</br>";
     pageText += String(altitude) + " meters</br>";
