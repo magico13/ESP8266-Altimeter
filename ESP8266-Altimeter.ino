@@ -25,6 +25,7 @@ Nice to have:
 #define STATE_POSTFLIGHT 2
 
 const int TEMP_POLL_INTERVAL = 1000; //ms between reading the temperature
+const uint16_t ALLOWABLE_DATA_POINTS = 8000; //total data points to keep, after which we'll stop logging. This is to keep the file size within the flash limit (8k*30B ~= 234kB )
 
 const char* IDLE_PAGE =  "State is IDLE </br><form action=\"/START\" method=\"POST\"><input type=\"submit\" value=\"Start Recording\"></form>";
 const char* POST_FLIGHT_PAGE = "State is POSTFLIGHT </br><a href=\"/data\">Download Flight Data</a> </br></br> <a href=\"/reset\">RESET</a>";
@@ -33,6 +34,7 @@ const char* UPDATE_PAGE = "<form method='POST' action='/update' enctype='multipa
 
 uint8_t currentState = STATE_IDLE;
 uint8_t connectedStations = 0;
+uint16_t totalDataPoints = 0;
 unsigned long time_ms;
 unsigned long last_temp_ms = 0;
 unsigned long start_ms = 0;
@@ -172,6 +174,8 @@ void flight_loop()
     dataFile.print(", ");
     dataFile.println(altitude);
 
+    totalDataPoints++;
+
     // if (tsn_time_start == 0) //disable auto stop data collection, must manually stop
     // {
     //   tsn_time_start = time_ms;
@@ -195,6 +199,10 @@ void flight_loop()
   }
   //no delay for most readings
   //delay(10);
+  if (totalDataPoints > ALLOWABLE_DATA_POINTS)
+  {
+    post_flight_setup();
+  }
 }
 
 void post_flight_setup()
